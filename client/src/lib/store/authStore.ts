@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { apiClient } from "../api/client";
 
 interface User {
@@ -31,140 +30,119 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => void;
-  fetchMe: () => Promise<void>;
+  restoreSession: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
+  user: null,
+  org: null,
+  token: null,
+  refreshToken: null,
+  isAuthenticated: false,
+  isLoading: true, // initial state is loading until restoreSession finishes
+
+  setAuth: (user, org, token, refreshToken) => {
+    set({ 
+      user, 
+      org, 
+      token, 
+      refreshToken, 
+      isAuthenticated: true,
+      isLoading: false
+    });
+  },
+
+  login: async (email, password) => {
+    set({ isLoading: true });
+    try {
+      const res = await apiClient.post("/auth/login", { email, password });
+      const { user, organization, accessToken, refreshToken } = res.data.data;
+      
+      set({
+        user,
+        org: organization,
+        token: accessToken,
+        refreshToken,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } catch (error) {
+      set({ isLoading: false });
+      throw error;
+    }
+  },
+
+  register: async (data) => {
+    set({ isLoading: true });
+    try {
+      const res = await apiClient.post("/auth/register", data);
+      const { user, organization, tokens } = res.data.data;
+      
+      set({
+        user,
+        org: organization,
+        token: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } catch (error) {
+      set({ isLoading: false });
+      throw error;
+    }
+  },
+
+  logout: async () => {
+    try {
+      await apiClient.post("/auth/logout");
+    } catch (e) {
+      // ignore
+    }
+    set({
       user: null,
       org: null,
       token: null,
       refreshToken: null,
       isAuthenticated: false,
-      isLoading: false,
+      isLoading: false
+    });
+  },
 
-      setAuth: (user, org, token, refreshToken) => {
+  restoreSession: async () => {
+    set({ isLoading: true });
+    try {
+      // Backend should read from HttpOnly cookies (or we use token if we kept it)
+      // Actually strictly from prompt: `GET /auth/me (sends httpOnly cookie automatically)`
+      const res = await apiClient.get("/auth/me");
+      if (res.data?.data) {
+        const payload = res.data.data;
+        // User could come nested or flat. Assume flat or nested in user/org based on schema
+        const user = payload.user || payload;
+        const org = payload.org || payload.organization || null;
         set({ 
-          user, 
-          org, 
-          token, 
-          refreshToken, 
-          isAuthenticated: true 
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            orgId: user.orgId || org?.id
+          }, 
+          org,
+          isAuthenticated: true,
+          isLoading: false 
         });
-      },
-
-      login: async (email, password) => {
-        set({ isLoading: true });
-        try {
-          const res = await apiClient.post("/auth/login", { email, password });
-          const { user, organization, accessToken, refreshToken } = res.data.data;
-          
-          set({
-            user,
-            org: organization,
-            token: accessToken,
-            refreshToken,
-            isAuthenticated: true,
-            isLoading: false,
-          });
-
-          // Sync with legacy localStorage for axios interceptor
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('access_token', accessToken);
-            localStorage.setItem('refresh_token', refreshToken);
-          }
-        } catch (error) {
-          set({ isLoading: false });
-          throw error;
-        }
-      },
-
-      register: async (data) => {
-        set({ isLoading: true });
-        try {
-          const res = await apiClient.post("/auth/register", data);
-          const { user, organization, tokens } = res.data.data;
-          
-          set({
-            user,
-            org: organization,
-            token: tokens.accessToken,
-            refreshToken: tokens.refreshToken,
-            isAuthenticated: true,
-            isLoading: false,
-          });
-
-          // Sync with legacy localStorage for axios interceptor
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('access_token', tokens.accessToken);
-            localStorage.setItem('refresh_token', tokens.refreshToken);
-          }
-        } catch (error) {
-          set({ isLoading: false });
-          throw error;
-        }
-      },
-
-      logout: () => {
-        set({
-          user: null,
-          org: null,
-          token: null,
-          refreshToken: null,
-          isAuthenticated: false,
-        });
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem("auth-storage");
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("refresh_token");
-        }
-      },
-
-      fetchMe: async () => {
-        const token = get().token || (typeof window !== 'undefined' ? localStorage.getItem('access_token') : null);
-        if (!token) return;
-        
-        set({ isLoading: true });
-        try {
-          const res = await apiClient.get("/auth/me");
-          const user = res.data.data;
-          set({ 
-            user: {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              orgId: user.orgId
-            }, 
-            org: user.org,
-            isAuthenticated: true,
-            isLoading: false 
-          });
-        } catch (error) {
-          set({ 
-            user: null, 
-            org: null, 
-            token: null, 
-            refreshToken: null,
-            isAuthenticated: false,
-            isLoading: false 
-          });
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem("access_token");
-            localStorage.removeItem("refresh_token");
-          }
-          throw error;
-        }
-      },
-    }),
-    {
-      name: "auth-storage",
-      partialize: (state) => ({ 
-        token: state.token, 
-        refreshToken: state.refreshToken,
-        isAuthenticated: state.isAuthenticated 
-      }),
+      } else {
+        set({ isAuthenticated: false, isLoading: false });
+      }
+    } catch (error) {
+      set({ 
+        user: null, 
+        org: null, 
+        token: null, 
+        refreshToken: null,
+        isAuthenticated: false,
+        isLoading: false 
+      });
     }
-  )
-);
+  },
+}));
