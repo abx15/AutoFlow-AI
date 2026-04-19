@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useAuthStore } from '../store/authStore';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
 
@@ -13,11 +14,9 @@ const apiClient = axios.create({
 // Request Interceptor: Add Authorization header
 apiClient.interceptors.request.use(
   (config) => {
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('access_token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
+    const token = useAuthStore.getState().token;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
@@ -33,9 +32,7 @@ apiClient.interceptors.response.use(
     // Handle 401 Unauthorized (Auto Logout)
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('auth-storage');
+        useAuthStore.getState().logout();
         window.location.href = '/login?expired=true';
       }
     }
