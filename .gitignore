@@ -23,3 +23,8 @@ Thumbs.db
 uploads/
 scratch/
 temp/
+
+# Markdown files
+login.md
+structer.md
+*.md
