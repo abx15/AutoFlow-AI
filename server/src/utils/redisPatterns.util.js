@@ -18,10 +18,20 @@ export async function acquireLock(key, ttlSeconds = 30) {
   
   try {
     const client = redisClient.getClient();
-    // Use SET key value NX EX ttl
-    const result = await client.set(lockKey, lockId, 'NX', 'EX', ttlSeconds);
     
-    if (result === 'OK') {
+    // Check if it's Upstash Redis (HTTPS URL)
+    const isUpstash = process.env.REDIS_URL?.startsWith('https://');
+    
+    let result;
+    if (isUpstash) {
+      // Upstash Redis uses different syntax
+      result = await client.set(lockKey, lockId, { nx: true, ex: ttlSeconds });
+    } else {
+      // Regular Redis uses SET with NX EX parameters
+      result = await client.set(lockKey, lockId, 'NX', 'EX', ttlSeconds);
+    }
+    
+    if (result === 'OK' || result === 'OK' || result === true) {
       return { acquired: true, lockId };
     }
     
@@ -65,6 +75,26 @@ export async function releaseLock(key, lockId) {
  */
 export async function checkIdempotency(key, ttlSeconds = 3600) {
   const fullKey = `idempotency:${key}`;
-  const result = await redisHelpers.set(fullKey, '1', 'NX', 'EX', ttlSeconds);
-  return result === 'OK';
+  
+  try {
+    const client = redisClient.getClient();
+    if (!client) return false;
+    
+    // Check if it's Upstash Redis (HTTPS URL)
+    const isUpstash = process.env.REDIS_URL?.startsWith('https://');
+    
+    let result;
+    if (isUpstash) {
+      // Upstash Redis uses different syntax
+      result = await client.set(fullKey, '1', { nx: true, ex: ttlSeconds });
+    } else {
+      // Regular Redis uses SET with NX EX parameters
+      result = await client.set(fullKey, '1', 'NX', 'EX', ttlSeconds);
+    }
+    
+    return result === 'OK' || result === 'OK' || result === true;
+  } catch (error) {
+    logger.error(`Idempotency check error for key ${key}:`, error);
+    return false;
+  }
 }
