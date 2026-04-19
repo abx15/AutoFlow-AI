@@ -173,7 +173,7 @@ export default function AnalyticsPage() {
                     dataKey="value"
                   >
                     {(stats?.modelDistribution || mockPieData).map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} cornerRadius={8} />
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip 
