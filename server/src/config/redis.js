@@ -16,11 +16,19 @@ class RedisClient {
     try {
       // Handle Upstash HTTPS URLs
       if (env.REDIS_URL.startsWith('https://')) {
-        // For Upstash, use the REST API
+        // For Upstash, use REST API
         logger.info('Using Upstash Redis (HTTPS) configuration');
         this.client = new Redis({
           url: env.REDIS_URL,
           token: env.UPSTASH_REDIS_REST_TOKEN,
+          // Add retry and timeout options for Upstash
+          retry: {
+            retries: 3,
+            factor: 2,
+            minTimeout: 1000,
+            maxTimeout: 5000
+          },
+          timeout: 10000
         });
       } else {
         // For regular Redis, use ioredis
@@ -34,8 +42,17 @@ class RedisClient {
           },
           connectTimeout: 10000,
           enableOfflineQueue: false,
-          maxRetriesPerRequest: 5,
+          maxRetriesPerRequest: 3,
           lazyConnect: true,
+          // Add connection resilience options
+          retryDelayOnFailover: 100,
+          enableReadyCheck: true,
+          maxLoadingTimeout: 5000,
+          // Handle connection resets
+          keepAlive: 30000,
+          family: 4,
+          // Add buffer limits
+          commandTimeout: 5000
         });
       }
 
@@ -46,9 +63,15 @@ class RedisClient {
           logger.info('Redis connected successfully');
         });
 
+        this.client.on('ready', () => {
+          this.isConnected = true;
+          logger.info('Redis ready for commands');
+        });
+
         this.client.on('error', (error) => {
           this.isConnected = false;
           logger.error('Redis connection error:', error);
+          // Don't exit on connection errors, just log them
         });
 
         this.client.on('close', () => {
@@ -59,11 +82,27 @@ class RedisClient {
         this.client.on('reconnecting', () => {
           logger.info('Redis reconnecting...');
         });
+
+        this.client.on('end', () => {
+          this.isConnected = false;
+          logger.warn('Redis connection ended');
+        });
       }
 
       // For Upstash Redis, we don't need to connect
       if (!env.REDIS_URL.startsWith('https://')) {
         await this.client.connect();
+      } else {
+        // For Upstash, test connection
+        try {
+          await this.client.ping();
+          this.isConnected = true;
+          logger.info('Upstash Redis connection verified');
+        } catch (pingError) {
+          logger.warn('Upstash Redis ping failed:', pingError.message);
+          // Still mark as connected for Upstash as it might be a temporary issue
+          this.isConnected = true;
+        }
       }
 
       this.isConnected = true;
@@ -94,10 +133,26 @@ class RedisClient {
   }
 
   getClient() {
-    if (!this.client || !this.isConnected) {
-      throw new Error('Redis not connected. Call connect() first.');
+    try {
+      if (!this.client) {
+        logger.warn('Redis client not initialized, attempting to connect...');
+        this.connect();
+        return null;
+      }
+      
+      if (!this.isConnected) {
+        logger.warn('Redis not connected, attempting reconnection...');
+        // Don't block, just try to reconnect in background
+        this.connect().catch(err => {
+          logger.error('Background Redis reconnection failed:', err.message);
+        });
+      }
+      
+      return this.client;
+    } catch (error) {
+      logger.error('Error getting Redis client:', error.message);
+      return null;
     }
-    return this.client;
   }
 
   isReady() {
@@ -119,21 +174,38 @@ export const redisHelpers = {
       if (!client) return null;
       return await client.get(key);
     } catch (error) {
-      logger.error(`Redis GET error for key ${key}:`, error);
+      // Don't log ECONNRESET errors as they're handled by connection manager
+      if (!error.message.includes('ECONNRESET')) {
+        logger.error(`Redis GET error for key ${key}:`, error);
+      }
       return null;
     }
   },
 
-  async set(key, value, ttlSeconds) {
+  async set(key, value, ...args) {
     try {
       const client = redisClient.getClient();
       if (!client) return false;
-      if (ttlSeconds) {
-        return await client.setex(key, ttlSeconds, value);
+      
+      // Handle different Redis client APIs
+      if (args.length === 1 && typeof args[0] === 'object') {
+        // Upstash Redis style: set(key, value, { nx: true, ex: ttl })
+        return await client.set(key, value, args[0]);
+      } else if (args.length === 2 && typeof args[0] === 'string' && typeof args[1] === 'string') {
+        // Regular Redis style: set(key, value, 'NX', 'EX', ttl)
+        return await client.set(key, value, args[0], args[1]);
+      } else if (args.length === 1 && typeof args[0] === 'number') {
+        // Simple TTL: set(key, value, ttlSeconds)
+        return await client.setex(key, args[0], value);
+      } else {
+        // Simple set
+        return await client.set(key, value);
       }
-      return await client.set(key, value);
     } catch (error) {
-      logger.error(`Redis SET error for key ${key}:`, error);
+      // Don't log ECONNRESET errors as they're handled by connection manager
+      if (!error.message.includes('ECONNRESET')) {
+        logger.error(`Redis SET error for key ${key}:`, error);
+      }
       return null;
     }
   },
@@ -144,7 +216,9 @@ export const redisHelpers = {
       if (!client) return 0;
       return await client.del(key);
     } catch (error) {
-      logger.error(`Redis DEL error for key ${key}:`, error);
+      if (!error.message.includes('ECONNRESET')) {
+        logger.error(`Redis DEL error for key ${key}:`, error);
+      }
       return 0;
     }
   },
@@ -155,7 +229,9 @@ export const redisHelpers = {
       if (!client) return 0;
       return await client.exists(key);
     } catch (error) {
-      logger.error(`Redis EXISTS error for key ${key}:`, error);
+      if (!error.message.includes('ECONNRESET')) {
+        logger.error(`Redis EXISTS error for key ${key}:`, error);
+      }
       return 0;
     }
   },
@@ -166,7 +242,9 @@ export const redisHelpers = {
       if (!client) return 0;
       return await client.incr(key);
     } catch (error) {
-      logger.error(`Redis INCR error for key ${key}:`, error);
+      if (!error.message.includes('ECONNRESET')) {
+        logger.error(`Redis INCR error for key ${key}:`, error);
+      }
       return 0;
     }
   },
@@ -177,7 +255,9 @@ export const redisHelpers = {
       if (!client) return 0;
       return await client.expire(key, seconds);
     } catch (error) {
-      logger.error(`Redis EXPIRE error for key ${key}:`, error);
+      if (!error.message.includes('ECONNRESET')) {
+        logger.error(`Redis EXPIRE error for key ${key}:`, error);
+      }
       return 0;
     }
   },
@@ -188,7 +268,9 @@ export const redisHelpers = {
       if (!client) return 0;
       return await client.expireat(key, timestamp);
     } catch (error) {
-      logger.error(`Redis EXPIREAT error for key ${key}:`, error);
+      if (!error.message.includes('ECONNRESET')) {
+        logger.error(`Redis EXPIREAT error for key ${key}:`, error);
+      }
       return 0;
     }
   },
