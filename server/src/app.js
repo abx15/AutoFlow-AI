@@ -88,7 +88,8 @@ if (env.NODE_ENV === 'development') {
  * ═══════════════════════════════════════════════════════
  */
 
-// Documentation
+// Documentation Redirects
+app.get('/docs', (req, res) => res.redirect('/api/v1/docs'));
 app.get('/api/v1/docs', (req, res) => res.send(getDocsHTML()));
 app.get('/api/v1/docs/json', (req, res) => res.json(buildOpenAPISpec()));
 app.get('/api/v1/docs/yaml', (req, res) => {
@@ -98,6 +99,12 @@ app.get('/api/v1/docs/yaml', (req, res) => {
 });
 
 // Main API Routes
+app.get('/api/v1', (req, res) => res.json({
+  message: 'Welcome to AutoFlow AI Engine API',
+  version: '1.0.0',
+  docs: '/api/v1/docs',
+  status: 'operational'
+}));
 app.use('/api/v1', routes);
 
 // 404 handler

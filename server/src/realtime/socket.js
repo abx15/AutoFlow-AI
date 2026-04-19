@@ -19,13 +19,16 @@ export const initSocket = (httpServer) => {
     }
   });
 
-  // 1. Redis Adapter for Scaling
-  const pubClient = redisClient.getClient().duplicate();
-  const subClient = redisClient.getClient().duplicate();
-  
-  // Note: For ioredis/upstash clients, we might need to await connect() 
-  // depending on initialization. redisClient.getClient() usually handles this.
-  io.adapter(createAdapter(pubClient, subClient));
+  // 1. Redis Adapter for Scaling (Only if Redis client supports duplication)
+  const client = redisClient.getClient();
+  if (typeof client.duplicate === 'function') {
+    const pubClient = client.duplicate();
+    const subClient = client.duplicate();
+    io.adapter(createAdapter(pubClient, subClient));
+    logger.info('Socket.IO Redis adapter initialized');
+  } else {
+    logger.warn('Redis client does not support duplication. Socket.IO falling back to memory adapter.');
+  }
 
   // 2. Authentication Middleware
   io.use(async (socket, next) => {

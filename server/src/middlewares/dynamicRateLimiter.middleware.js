@@ -33,10 +33,9 @@ export const dynamicRateLimiter = async (req, res, next) => {
     return next();
   }
 
-  // Create or retrieve the rate limiter for this specific plan
-  // Note: For a truly dynamic approach per-request with express-rate-limit,
-  // we use a store-only approach or a wrapper.
-  
+  const client = redisClient.isReady() ? redisClient.getClient() : null;
+  const useRedis = client && typeof client.call === 'function';
+
   const limiter = rateLimit({
     windowMs: config.windowMs,
     max: config.max,
@@ -45,10 +44,10 @@ export const dynamicRateLimiter = async (req, res, next) => {
     keyGenerator: (req) => {
       return orgId ? `rate_limit:${orgId}` : `rate_limit:${req.ip}`;
     },
-    store: new RedisStore({
-      sendCommand: (...args) => redisClient.getClient().call(...args),
+    store: useRedis ? new RedisStore({
+      sendCommand: (...args) => client.call(...args),
       prefix: 'rl:',
-    }),
+    }) : undefined, // Falls back to internal MemoryStore
     handler: (req, res) => {
       logger.warn(`Rate limit exceeded for org: ${orgId || req.ip}`, { plan });
       res.status(429).json({
@@ -84,14 +83,17 @@ export const resourceRateLimiter = (resourceType) => {
 
     if (config.max === -1) return next();
 
+    const client = redisClient.isReady() ? redisClient.getClient() : null;
+    const useRedis = client && typeof client.call === 'function';
+
     return rateLimit({
       windowMs: config.windowMs,
       max: config.max,
       keyGenerator: (req) => `${resourceType}_limit:${orgId || req.ip}`,
-      store: new RedisStore({
-        sendCommand: (...args) => redisClient.getClient().call(...args),
+      store: useRedis ? new RedisStore({
+        sendCommand: (...args) => client.call(...args),
         prefix: `rl_${resourceType}:`,
-      }),
+      }) : undefined,
     })(req, res, next);
   };
 };

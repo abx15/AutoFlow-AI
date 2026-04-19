@@ -92,6 +92,9 @@ async function main() {
   console.log('✅ Demo organization and user seeded');
 
   // 3. System Workflow Templates
+  console.log('📦 Seeding workflow templates...');
+  await prisma.workflowTemplate.deleteMany({ where: { createdBy: null } }); 
+  
   const templates = [
     {
       name: 'Lead Enrichment from Webhook',
@@ -117,10 +120,8 @@ async function main() {
   ];
 
   for (const template of templates) {
-    await prisma.workflowTemplate.upsert({
-      where: { id: template.id || undefined, name: template.name }, // Hack because we don't have UUIDs upfront
-      update: template,
-      create: template,
+    await prisma.workflowTemplate.create({
+      data: template,
     });
   }
   console.log('✅ Workflow templates seeded');
