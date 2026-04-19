@@ -31,11 +31,7 @@ import { motion } from "framer-motion";
 import { ModernBackground } from "@/components/ui/modern-background";
 
 export default function DashboardOverview() {
-  const { user, org, fetchMe } = useAuthStore();
-
-  useEffect(() => {
-    fetchMe();
-  }, []);
+  const { user, org } = useAuthStore();
 
   return (
     <div className="space-y-12 pb-20 relative">

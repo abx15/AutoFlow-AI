@@ -3,8 +3,9 @@
 import { usePathname } from "next/navigation";
 import { Search, Bell, History, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { NotificationBell } from "./NotificationBell";
+import { cn } from "@/lib/utils";
 
 export function TopBar() {
   const pathname = usePathname();
@@ -42,11 +43,9 @@ export function TopBar() {
           </Button>
           <NotificationBell />
           <div className="h-8 w-px bg-border mx-2" />
-          <a href="/dashboard/workflows/new">
-            <Button size="sm" className="gap-2">
-              <Plus className="w-4 h-4" />
-              New Workflow
-            </Button>
+          <a href="/dashboard/workflows/new" className={cn(buttonVariants({ size: "sm" }), "gap-2")}>
+            <Plus className="w-4 h-4" />
+            New Workflow
           </a>
         </div>
       </div>

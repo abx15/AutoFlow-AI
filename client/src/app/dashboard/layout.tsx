@@ -13,8 +13,14 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
-  const { isAuthenticated, isLoading, fetchMe } = useAuthStore();
+  const { isAuthenticated, isLoading, restoreSession } = useAuthStore();
   const router = useRouter();
+
+  useEffect(() => {
+    // Only call restoreSession if we are loading and haven't authenticated yet
+    // Actually, just calling restoreSession once on mount is standard pattern for persistent auth
+    restoreSession();
+  }, [restoreSession]);
 
   useEffect(() => {
     // If we're not loading and not authenticated, redirect to login

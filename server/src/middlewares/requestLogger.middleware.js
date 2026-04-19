@@ -33,14 +33,14 @@ export function requestLogger(req, res, next) {
   // Wrap the entire request in AsyncLocalStorage context
   requestContext.run(contextData, () => {
     // Override res.writeHead to add response time
-    const originalWriteHead = res.writeHead.bind(res);
-    res.writeHead = function (statusCode, statusMessage, headers) {
+    const originalWriteHead = res.writeHead;
+    res.writeHead = function (...args) {
       if (!res.headersSent) {
         const elapsedNs = process.hrtime.bigint() - startHrTime;
         const elapsedMs = Number(elapsedNs / 1000000n);
         res.setHeader('X-Response-Time', `${elapsedMs}ms`);
       }
-      return originalWriteHead(statusCode, statusMessage, headers);
+      return originalWriteHead.apply(this, args);
     };
 
     // Skip health checks and metrics from main logs if needed
