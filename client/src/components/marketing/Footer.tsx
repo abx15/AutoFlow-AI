@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Github, Twitter, Linkedin, MessageSquare } from 'lucide-react';
+import { Code, MessageCircle, Users, Mail } from 'lucide-react';
 
 export function Footer() {
   return (
@@ -12,7 +12,7 @@ export function Footer() {
           {/* Brand Col - takes 2 cols on mobile/tablet */}
           <div className="col-span-2 lg:col-span-1 lg:pr-8">
             <Link href="/" className="inline-flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg">
+              <div className="w-8 h-8 rounded-lg bg-linear-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg">
                 A
               </div>
               <span className="text-xl font-black tracking-tight text-white">AutoFlow AI</span>
@@ -22,16 +22,16 @@ export function Footer() {
             </p>
             <div className="flex items-center gap-3 mb-8">
               <a href="#" className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-slate-400 hover:bg-brand-500 hover:text-white hover:border-brand-500 transition-all">
-                <Github className="w-4 h-4" />
+                <Code className="w-4 h-4" />
               </a>
               <a href="#" className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-slate-400 hover:bg-[#1DA1F2] hover:text-white hover:border-[#1DA1F2] transition-all">
-                <Twitter className="w-4 h-4" />
+                <MessageCircle className="w-4 h-4" />
               </a>
               <a href="#" className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-slate-400 hover:bg-[#0A66C2] hover:text-white hover:border-[#0A66C2] transition-all">
-                <Linkedin className="w-4 h-4" />
+                <Users className="w-4 h-4" />
               </a>
               <a href="#" className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-slate-400 hover:bg-[#5865F2] hover:text-white hover:border-[#5865F2] transition-all">
-                <MessageSquare className="w-4 h-4" />
+                <Mail className="w-4 h-4" />
               </a>
             </div>
             <div className="text-xs text-slate-600">

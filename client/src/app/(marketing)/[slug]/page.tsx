@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 
 export default function GenericMarketingPage({ params }: { params: { slug: string } }) {
   // Format slug for title (e.g. "privacy-policy" -> "Privacy Policy")
-  const title = params.slug.split("-").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+  const title = (params.slug || "").split("-").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
 
   return (
     <div className="relative min-h-[80vh] flex flex-col items-center justify-center pt-32 pb-24 overflow-hidden bg-[#05050A]">
