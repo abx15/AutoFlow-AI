@@ -83,6 +83,61 @@ export class ApiKeyController {
       next(error);
     }
   }
+
+  // User-specific API key endpoints
+  async generateUserApiKey(req, res, next) {
+    try {
+      const { name, permissions, expiresAt } = req.body;
+      const orgId = req.user.orgId;
+      const userId = req.user.id;
+
+      const apiKey = await apiKeyService.generateUserApiKey(userId, orgId, {
+        name,
+        permissions,
+        expiresAt,
+      });
+
+      return successResponse(res, apiKey, 'User API key generated successfully', 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async listUserApiKeys(req, res, next) {
+    try {
+      const orgId = req.user.orgId;
+      const userId = req.user.id;
+      const options = {
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || 20,
+        status: req.query.status,
+        permission: req.query.permission,
+      };
+
+      const result = await apiKeyService.listUserApiKeys(userId, orgId, options);
+
+      return successResponse(res, result, 'User API keys retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async revokeUserApiKey(req, res, next) {
+    try {
+      const { id } = req.params;
+      const orgId = req.user.orgId;
+      const userId = req.user.id;
+
+      const apiKey = await apiKeyService.revokeUserApiKey(id, userId, orgId);
+
+      return successResponse(res, apiKey, 'User API key revoked successfully');
+    } catch (error) {
+      if (error.message === 'User API key not found') {
+        return next(new AppError('User API key not found', 'USER_API_KEY_NOT_FOUND', 404));
+      }
+      next(error);
+    }
+  }
 }
 
 export const apiKeyController = new ApiKeyController();

@@ -305,6 +305,7 @@ model ApiKey {
   name       String
   keyHash    String    @unique
   keyPrefix  String
+  keyType    String    @default("organization") // organization|user
   permissions Json     @default("[\"read\",\"write\"]")
   lastUsedAt DateTime?
   expiresAt  DateTime?

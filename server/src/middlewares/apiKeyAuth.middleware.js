@@ -14,12 +14,12 @@ export async function authenticateApiKey(req, res, next) {
       );
     }
 
-    // Validate API key format
-    if (!apiKey.startsWith('ak_live_')) {
+    // Validate API key format (support both organization and user keys)
+    if (!apiKey.startsWith('ak_live_') && !apiKey.startsWith('uk_live_')) {
       return errorResponse(
         res,
         'INVALID_API_KEY_FORMAT',
-        'Invalid API key format',
+        'Invalid API key format. Must start with ak_live_ or uk_live_',
         401
       );
     }

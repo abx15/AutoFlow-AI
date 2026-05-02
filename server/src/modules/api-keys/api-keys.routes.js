@@ -3,7 +3,7 @@ import { apiKeyController } from './api-keys.controller.js';
 import { authenticate } from '../../middlewares/auth.middleware.js';
 import { requirePermission } from '../../middlewares/rbac.middleware.js';
 import { validate } from '../../middlewares/validation.middleware.js';
-import { createApiKeySchema, listApiKeysSchema } from './api-keys.schema.js';
+import { createApiKeySchema, listApiKeysSchema, createUserApiKeySchema, listUserApiKeysSchema } from './api-keys.schema.js';
 import { idempotencyCheck } from '../../middlewares/idempotency.middleware.js';
 
 const router = Router();
@@ -42,6 +42,25 @@ router.get('/:id',
 router.delete('/:id',
   requirePermission('apikey:manage'),
   apiKeyController.revokeApiKey
+);
+
+// User-specific API key routes (no admin permissions required - users manage their own keys)
+// POST /api/api-keys/user - Generate new user API key
+router.post('/user',
+  validate(createUserApiKeySchema),
+  idempotencyCheck,
+  apiKeyController.generateUserApiKey
+);
+
+// GET /api/api-keys/user - List user's API keys
+router.get('/user',
+  validate(listUserApiKeysSchema, 'query'),
+  apiKeyController.listUserApiKeys
+);
+
+// DELETE /api/api-keys/user/:id - Revoke user API key
+router.delete('/user/:id',
+  apiKeyController.revokeUserApiKey
 );
 
 export { router as apiKeyRoutes };

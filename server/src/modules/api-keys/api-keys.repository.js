@@ -9,6 +9,7 @@ export class ApiKeyRepository {
         name: data.name,
         keyHash: data.keyHash,
         keyPrefix: data.keyPrefix,
+        keyType: data.keyType || 'organization',
         permissions: data.permissions,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
       },
@@ -16,6 +17,7 @@ export class ApiKeyRepository {
         id: true,
         name: true,
         keyPrefix: true,
+        keyType: true,
         permissions: true,
         expiresAt: true,
         isActive: true,
@@ -156,6 +158,72 @@ export class ApiKeyRepository {
         id: true,
         orgId: true,
         name: true,
+      },
+    });
+  }
+
+  async findByUserId(userId, orgId, options = {}) {
+    const { page = 1, limit = 20, status, permission } = options;
+    const skip = (page - 1) * limit;
+
+    const where = {
+      orgId,
+      createdBy: userId,
+      keyType: 'user',
+      ...(status && { isActive: status === 'active' }),
+      ...(permission && { permissions: { has: permission } }),
+    };
+
+    const [apiKeys, total] = await Promise.all([
+      prisma.apiKey.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          keyPrefix: true,
+          keyType: true,
+          permissions: true,
+          expiresAt: true,
+          isActive: true,
+          createdAt: true,
+          lastUsedAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.apiKey.count({ where }),
+    ]);
+
+    return {
+      apiKeys,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findByIdAndUserId(id, userId, orgId) {
+    return await prisma.apiKey.findFirst({
+      where: { 
+        id, 
+        orgId,
+        createdBy: userId,
+        keyType: 'user'
+      },
+      select: {
+        id: true,
+        name: true,
+        keyPrefix: true,
+        keyType: true,
+        permissions: true,
+        expiresAt: true,
+        isActive: true,
+        createdAt: true,
+        lastUsedAt: true,
       },
     });
   }

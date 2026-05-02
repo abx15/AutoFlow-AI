@@ -5,8 +5,10 @@ import { logger } from '../../utils/logger.util.js';
 
 export class ApiKeyService {
   async generateApiKey(orgId, userId, data) {
-    // Generate API key
-    const key = `ak_live_${crypto.randomBytes(32).toString('hex')}`;
+    // Generate API key with different prefixes for user vs org keys
+    const keyType = data.keyType || 'organization';
+    const prefix = keyType === 'user' ? 'uk_live_' : 'ak_live_';
+    const key = `${prefix}${crypto.randomBytes(32).toString('hex')}`;
     const keyPrefix = key.substring(0, 12);
     const keyHash = crypto.createHash('sha256').update(key).digest('hex');
 
@@ -17,6 +19,7 @@ export class ApiKeyService {
       name: data.name,
       keyHash,
       keyPrefix,
+      keyType,
       permissions: data.permissions,
       expiresAt: data.expiresAt,
     });
@@ -187,6 +190,90 @@ export class ApiKeyService {
       active: active.pagination.total,
       expired: expired.length,
     };
+  }
+
+  async generateUserApiKey(userId, orgId, data) {
+    // Generate user-specific API key
+    const key = `uk_live_${crypto.randomBytes(32).toString('hex')}`;
+    const keyPrefix = key.substring(0, 12);
+    const keyHash = crypto.createHash('sha256').update(key).digest('hex');
+
+    // Save to database with user type
+    const apiKey = await apiKeyRepository.create({
+      orgId,
+      createdBy: userId,
+      name: data.name,
+      keyHash,
+      keyPrefix,
+      keyType: 'user',
+      permissions: data.permissions || ['read', 'write'],
+      expiresAt: data.expiresAt,
+    });
+
+    // Log audit
+    await this.logAuditEvent(orgId, userId, 'user_apikey.created', 'api_key', apiKey.id, {
+      name: data.name,
+      permissions: data.permissions,
+    });
+
+    logger.info('User API key created', {
+      apiKeyId: apiKey.id,
+      orgId,
+      userId,
+      name: data.name,
+    });
+
+    // Return full key only once
+    return {
+      id: apiKey.id,
+      name: apiKey.name,
+      key: key, // Full key - only returned once
+      prefix: apiKey.keyPrefix,
+      keyType: apiKey.keyType,
+      permissions: apiKey.permissions,
+      expiresAt: apiKey.expiresAt,
+      createdAt: apiKey.createdAt,
+    };
+  }
+
+  async listUserApiKeys(userId, orgId, options) {
+    const result = await apiKeyRepository.findByUserId(userId, orgId, options);
+    
+    logger.debug('User API keys listed', {
+      userId,
+      orgId,
+      count: result.apiKeys.length,
+      page: options.page,
+    });
+
+    return result;
+  }
+
+  async revokeUserApiKey(id, userId, orgId) {
+    const apiKey = await apiKeyRepository.findByIdAndUserId(id, userId, orgId);
+    
+    if (!apiKey) {
+      throw new Error('User API key not found');
+    }
+
+    await apiKeyRepository.revoke(id, orgId);
+
+    // Invalidate any cache for this key
+    await cacheUtil.invalidatePattern(`apikey:*`);
+
+    // Log audit
+    await this.logAuditEvent(orgId, userId, 'user_apikey.revoked', 'api_key', id, {
+      name: apiKey.name,
+    });
+
+    logger.info('User API key revoked', {
+      apiKeyId: id,
+      orgId,
+      userId,
+      name: apiKey.name,
+    });
+
+    return apiKey;
   }
 
   async logAuditEvent(orgId, userId, action, resourceType, resourceId, details = {}) {

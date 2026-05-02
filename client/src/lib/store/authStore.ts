@@ -29,7 +29,7 @@ interface AuthState {
   
   setAuth: (user: User, org: Organization, token: string, refreshToken: string) => void;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: any) => Promise<void>;
+  register: (data: { name: string; email: string; password: string; orgName: string }) => Promise<void>;
   logout: () => void;
   restoreSession: () => Promise<void>;
 }
@@ -98,7 +98,7 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         try {
           await apiClient.post("/auth/logout");
-        } catch (e) {
+        } catch {
           // ignore
         }
         set({
@@ -113,6 +113,8 @@ export const useAuthStore = create<AuthState>()(
 
       restoreSession: async () => {
         const token = get().token;
+        const refreshToken = get().refreshToken;
+        
         if (!token) {
            set({ isAuthenticated: false, isLoading: false });
            return;
@@ -140,7 +142,45 @@ export const useAuthStore = create<AuthState>()(
           } else {
             set({ isAuthenticated: false, isLoading: false });
           }
-        } catch (error) {
+        } catch (error: unknown) {
+          // If token is expired and we have refresh token, try to refresh
+          if ((error as Error & { status?: number })?.status === 401 && refreshToken) {
+            try {
+              const refreshRes = await apiClient.post("/auth/refresh", {
+                refreshToken
+              });
+              
+              const { accessToken, refreshToken: newRefreshToken } = refreshRes.data.data;
+              
+              // Update tokens and retry user fetch
+              set({ token: accessToken, refreshToken: newRefreshToken });
+              
+              const userRes = await apiClient.get("/auth/me");
+              if (userRes.data?.data) {
+                const payload = userRes.data.data;
+                const user = payload.user || payload;
+                const org = payload.org || payload.organization || null;
+                set({ 
+                  user: {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    role: user.role,
+                    orgId: user.orgId || org?.id
+                  }, 
+                  org,
+                  isAuthenticated: true,
+                  isLoading: false 
+                });
+                return;
+              }
+            } catch (refreshError) {
+              // Refresh failed, clear session
+              console.error('Token refresh failed during session restore:', refreshError);
+            }
+          }
+          
+          // Clear session if restore failed
           set({ 
             user: null, 
             org: null, 
